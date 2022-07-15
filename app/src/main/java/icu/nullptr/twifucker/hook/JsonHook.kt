@@ -17,6 +17,9 @@ import java.net.URL
 fun JSONObject.jsonGetTweets(): JSONObject? =
     optJSONObject("globalObjects")?.optJSONObject("tweets")
 
+fun JSONObject.jsonGetThreads(): JSONArray? =
+    optJSONArray("threads")
+
 fun JSONObject.jsonGetInstructions(): JSONArray? =
     optJSONObject("timeline")?.optJSONArray("instructions")
 
@@ -59,6 +62,10 @@ fun JSONObject.tweetCheckAndRemove() {
     tweetGetExtendedEntitiesMedias()?.forEach<JSONObject> { media ->
         media.mediaCheckAndRemove()
     }
+}
+
+fun JSONObject.threadCheckAndRemove() {
+
 }
 
 // entry
@@ -330,7 +337,7 @@ fun JSONArray.entriesRemoveTimelineAds() {
 
         if (!modulePrefs.getBoolean("disable_promoted_content", true)) return@forEachIndexed
         if (entry.entryHasPromotedMetadata()) {
-            Log.d("Handle timeline ads $entryIndex $entry")
+            //Log.d("Handle timeline ads $entryIndex $entry")
             removeIndex.add(entryIndex)
         }
     }
@@ -345,7 +352,7 @@ fun JSONArray.entriesRemoveWhoToFollow() {
         if (!entry.entryIsWhoToFollow()) return@forEachIndexed
 
         if (modulePrefs.getBoolean("disable_who_to_follow", false)) {
-            Log.d("Handle whoToFollow $entryIndex $entry")
+            //Log.d("Handle whoToFollow $entryIndex $entry")
             entryRemoveIndex.add(entryIndex)
             return@forEachIndexed
         }
@@ -357,7 +364,7 @@ fun JSONArray.entriesRemoveWhoToFollow() {
         items?.forEachIndexed<JSONObject> { index, item ->
             item.itemContainsPromotedUser().let {
                 if (it) {
-                    Log.d("Handle whoToFollow promoted user $index $item")
+                    //Log.d("Handle whoToFollow promoted user $index $item")
                     userRemoveIndex.add(index)
                 }
             }
@@ -468,6 +475,14 @@ fun handleJson(param: XC_MethodHook.MethodHookParam) {
         }
         json.jsonGetInstructions()?.forEach<JSONObject> { instruction ->
             instruction.instructionCheckAndRemove()
+        }
+        /*
+        json.jsonGetThreads()?.forEach<JSONObject> { thread ->
+            thread.threadCheckAndRemove()
+        }
+        */
+        if (json.has("threads")) {
+            json.put("threads", JSONArray(ArrayList<JSONObject?>()))
         }
         json.jsonGetData()?.dataCheckAndRemove()
 
