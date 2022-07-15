@@ -28,28 +28,34 @@ private fun clearExtraParams(url: String): String {
 
 fun urlHook() {
     findAllMethods(Intent::class.java) { name == "replaceExtras" }.hookBefore { param ->
-        val bundle = param.args[0] as Bundle
-        val extraText = bundle.getString(Intent.EXTRA_TEXT)
-        if (extraText != null && extraText.isTwitterUrl()) {
-            val newExtraText = clearExtraParams(extraText)
-            bundle.putString(Intent.EXTRA_TEXT, newExtraText)
+        if (param != null && param.args[0] != null) {
+            val bundle = param.args[0] as Bundle
+            val extraText = bundle.getString(Intent.EXTRA_TEXT)
+            if (extraText != null && extraText.isTwitterUrl()) {
+                val newExtraText = clearExtraParams(extraText)
+                bundle.putString(Intent.EXTRA_TEXT, newExtraText)
+            }
         }
     }
     findAllMethods(Intent::class.java) { name == "createChooser" }.hookBefore { param ->
-        val intent = param.args[0] as Intent
-        val extraText = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return@hookBefore
-        if (!extraText.isTwitterUrl()) {
-            return@hookBefore
+        if (param != null && param.args[0] != null) {
+            val intent = param.args[0] as Intent
+            val extraText = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return@hookBefore
+            if (!extraText.isTwitterUrl()) {
+                return@hookBefore
+            }
+            Log.i("Handle Url")
+            intent.putExtra(Intent.EXTRA_TEXT, clearExtraParams(extraText))
         }
-        Log.i("Handle Url")
-        intent.putExtra(Intent.EXTRA_TEXT, clearExtraParams(extraText))
     }
     findAllMethods(ClipData::class.java) { name == "newPlainText" }.hookBefore { param ->
-        val text = (param.args[1] as CharSequence).toString()
-        if (!text.isTwitterUrl()) {
-            return@hookBefore
+        if (param != null && param.args[1] != null) {
+            val text = (param.args[1] as CharSequence).toString()
+            if (!text.isTwitterUrl()) {
+                return@hookBefore
+            }
+            Log.i("Handle Url")
+            param.args[1] = clearExtraParams(text)
         }
-        Log.i("Handle Url")
-        param.args[1] = clearExtraParams(text)
     }
 }

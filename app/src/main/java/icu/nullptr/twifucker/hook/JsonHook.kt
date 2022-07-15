@@ -6,7 +6,12 @@ import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.IOException
 import java.io.InputStream
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URI
+import java.net.URL
 
 // root
 fun JSONObject.jsonGetTweets(): JSONObject? =
@@ -29,10 +34,15 @@ fun JSONObject.dataCheckAndRemove() {
         instruction.instructionCheckAndRemove()
     }
     dataGetLegacy()?.legacyCheckAndRemove()
+    dataGetUserLegacy()?.userLegacyCheckAndRemove()
 }
 
 fun JSONObject.dataGetLegacy(): JSONObject? =
     optJSONObject("tweet_result")?.optJSONObject("result")?.optJSONObject("legacy")
+
+fun JSONObject.dataGetUserLegacy(): JSONObject? =
+    optJSONObject("user_result")?.optJSONObject("result")?.optJSONObject("legacy")
+
 
 // tweets
 fun JSONObject.tweetsForEach(action: (JSONObject) -> Unit) {
@@ -97,7 +107,7 @@ fun JSONArray.trendRemoveAds() {
     val trendRemoveIndex = mutableListOf<Int>()
     forEachIndexed<JSONObject> { trendIndex, trend ->
         if (trend.trendHasPromotedMetadata()) {
-            Log.d("Handle trends ads $trendIndex $trend")
+            //Log.d("Handle trends ads $trendIndex $trend")
             trendRemoveIndex.add(trendIndex)
         }
     }
@@ -113,6 +123,12 @@ fun JSONObject.legacyGetRetweetedStatusLegacy(): JSONObject? =
 fun JSONObject.legacyGetExtendedEntitiesMedias(): JSONArray? =
     optJSONObject("extended_entities")?.optJSONArray("media")
 
+fun JSONObject.legacyHasDescription(): Boolean =
+    has("description")
+
+fun JSONObject.legacyGetDescription(): String? =
+    getStringOrDefault("description", "!! missing description !!")
+
 fun JSONObject.legacyCheckAndRemove() {
     legacyGetExtendedEntitiesMedias()?.forEach<JSONObject> { media ->
         media.mediaCheckAndRemove()
@@ -121,6 +137,115 @@ fun JSONObject.legacyCheckAndRemove() {
         ?.forEach<JSONObject> { media ->
             media.mediaCheckAndRemove()
         }
+}
+
+@Throws(IOException::class, JSONException::class)
+fun getJSONObjectFromURL(urlString: String?): JSONObject? {
+    var urlConnection: HttpURLConnection? = null
+    val url = URL(urlString)
+    urlConnection = url.openConnection() as HttpURLConnection
+    urlConnection.setRequestMethod("GET")
+    urlConnection.addRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.95 Safari/537.11");
+    urlConnection.setReadTimeout(1000 /* milliseconds */)
+    urlConnection.setConnectTimeout(1500 /* milliseconds */)
+    //urlConnection.setDoOutput(true)
+    urlConnection.connect()
+    val resp = urlConnection.getResponseCode()
+    if (resp != 200) {
+        return JSONObject("{\"errorcode\":" + resp.toString() + "}")
+    }
+    //val stream = urlConnection.getErrorStream()
+    val stream = urlConnection.getInputStream()
+    //val stream = url.openStream()
+    val br = BufferedReader(InputStreamReader(stream))
+    val jsonString = br.use(BufferedReader::readText)
+    //Log.d("JSON: $jsonString")
+    urlConnection.disconnect()
+    return JSONObject(jsonString)
+}
+
+fun JSONObject.userLegacyCheckAndRemove(): Boolean {
+    var should_filter = false
+
+    //Log.d("Legacy info: " + toString())
+    if (legacyHasDescription()) {
+        val oldDesc = legacyGetDescription()
+        //Log.d("Found a user description: " + oldDesc)
+        remove("description");
+        var newDesc = oldDesc + " || Snooping | "
+        var id_str = "unk"
+        if (has("id_str")) {
+            newDesc += "ID "
+            id_str =  getStringOrDefault("id_str", "unk")
+            newDesc += id_str
+            newDesc += " || "
+
+            try {
+                val info = getJSONObjectFromURL("https://memory.lol/tw/id/" + id_str)
+                //val info = getJSONObjectFromURL("https://gist.githubusercontent.com/shinyquagsire23/19f581c2c7eaf1d80005fe42b448f9bf/raw/4a36431ba02445ab11e479239a52ed93c2e13f52/gistfile1.txt")
+
+                if (info?.has("errorcode") == true) {
+                    newDesc += "memory.lol err? " + info.getString("errorcode")
+                    newDesc += " || "
+                }
+
+                //Log.d("info " + info.toString())
+
+                info?.optJSONArray("accounts")?.forEachIndexed<JSONObject> { index, item ->
+                    //Log.d("item " + item.toString())
+                    if (item.has("id")) {
+                        //Log.d(item.getString("id") + " " + id_str)
+                        if (item.getString("id").equals(id_str)) {
+                            newDesc += "Previously: "
+                            item.optJSONObject("screen-names")?.names()?.forEachIndexed<String> { index, name ->
+                                //Log.d("prev " + name.toString())
+                                if (index != 0) {
+                                    newDesc += " | "
+                                }
+                                newDesc += "@" + name
+                            }
+                            newDesc += " || "
+                            return@forEachIndexed
+                        }
+                    }
+                }
+            }
+            catch(e: Throwable) {
+                Log.e(e)
+            }
+        }
+
+        put("description", newDesc);
+    }
+
+    optJSONObject("entities")?.optJSONArray("urls")
+        ?.forEachIndexed<JSONObject> { idx, urlEnt ->
+            //Log.d(urlEnt.getString("display_url").toString())
+            val uri = URI(urlEnt.getString("expanded_url").lowercase())
+            val domain = uri.host
+            val stripped = if (domain.startsWith("www.")) domain.substring(4) else domain
+
+            val spammy_names = listOf("suctional.com", "dentrie.com", "sunsetic.com",
+                "oceangalaxylight.com", "owlprojector.com", "shp.ee" ,"oceangalaxylight.shop")
+            if (spammy_names.contains(stripped)) {
+                should_filter = true
+            }
+
+            if (should_filter) {
+                put("full_text", "vibrator ad")
+                if (optJSONObject("extended_entities")?.has("media") == true) {
+                    optJSONObject("extended_entities")?.put("media",
+                        JSONArray(ArrayList<JSONObject?>()))
+                }
+                return@forEachIndexed
+            }
+        }
+    //optJSONObject("extended_entities")?.optJSONArray("media")
+
+    if (optJSONObject("core")?.optJSONObject("user_result")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove() == true) {
+        should_filter = true
+    }
+    return should_filter
 }
 
 // item
@@ -139,6 +264,7 @@ fun JSONObject.instructionGetAddEntries(): JSONArray? =
 
 fun JSONObject.instructionCheckAndRemove() {
     instructionTimelinePinEntry()?.entryRemoveSensitiveMediaWarning()
+    instructionTimelinePinEntry()?.entryChangeDescription()
     instructionTimelineAddEntries()?.entriesRemoveAnnoyance()
     instructionGetAddEntries()?.entriesRemoveAnnoyance()
 }
@@ -236,6 +362,10 @@ fun JSONObject.entryRemoveSensitiveMediaWarning() {
                     media.mediaCheckAndRemove()
                 }
         }
+
+        optJSONObject("content")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
+        optJSONObject("content")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("core")?.optJSONObject("user_result")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
+
     } else if (entryIsConversationThread()) {
         entryGetContentItems()?.forEach<JSONObject> { item ->
             item.entryGetLegacy()?.let { legacy ->
@@ -243,7 +373,19 @@ fun JSONObject.entryRemoveSensitiveMediaWarning() {
                     media.mediaCheckAndRemove()
                 }
             }
+
+            //Log.d(item.toString())
+
+            item.optJSONObject("item")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
+            item.optJSONObject("item")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("core")?.optJSONObject("user_result")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
         }
+    }
+}
+
+fun JSONObject.entryChangeDescription() {
+    if (entryIsTweet() || entryIsConversationThread()) {
+        optJSONObject("content")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
+        optJSONObject("content")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("core")?.optJSONObject("user_result")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
     }
 }
 
@@ -253,11 +395,18 @@ fun JSONArray.entriesRemoveSensitiveMediaWarning() {
     }
 }
 
+fun JSONArray.entriesChangeDescription() {
+    forEach<JSONObject> { entry ->
+        entry.entryChangeDescription()
+    }
+}
+
 fun JSONArray.entriesRemoveAnnoyance() {
     entriesRemoveTimelineAds()
     entriesRemoveWhoToFollow()
     entriesRemoveTopicsToFollow()
     entriesRemoveSensitiveMediaWarning()
+    entriesChangeDescription()
 }
 
 
@@ -265,6 +414,7 @@ fun handleJson(param: XC_MethodHook.MethodHookParam) {
     val inputStream = param.result as InputStream
     val reader = BufferedReader(inputStream.reader())
     var content: String
+
     try {
         reader.use { r ->
             content = r.readText()
@@ -288,7 +438,7 @@ fun handleJson(param: XC_MethodHook.MethodHookParam) {
     } catch (_: JSONException) {
     } catch (e: Throwable) {
         Log.e(e)
-        Log.d(content)
+        //Log.d(content)
     }
 
     try {
@@ -302,7 +452,7 @@ fun handleJson(param: XC_MethodHook.MethodHookParam) {
     } catch (_: JSONException) {
     } catch (e: Throwable) {
         Log.e(e)
-        Log.d(content)
+        //Log.d(content)
     }
 
     param.result = content.byteInputStream()
