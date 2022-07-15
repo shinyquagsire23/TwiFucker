@@ -258,6 +258,12 @@ fun JSONObject.userLegacyCheckAndRemove(): Boolean {
         put("description", newDesc);
     }
 
+    return should_filter
+}
+
+fun JSONObject.tweetLegacyCheckAndRemove(): Boolean {
+    var should_filter = false
+
     optJSONObject("entities")?.optJSONArray("urls")
         ?.forEachIndexed<JSONObject> { idx, urlEnt ->
             //Log.d(urlEnt.getString("display_url").toString())
@@ -321,7 +327,7 @@ fun JSONObject.mediaRemoveSensitiveMediaWarning() {
 fun JSONObject.mediaCheckAndRemove() {
     if (!modulePrefs.getBoolean("disable_sensitive_media_warning", false)) return
     if (mediaHasSensitiveMediaWarning()) {
-        Log.d("Handle sensitive media warning $this")
+        //Log.d("Handle sensitive media warning $this")
         mediaRemoveSensitiveMediaWarning()
     }
 }
@@ -384,7 +390,7 @@ fun JSONArray.entriesRemoveTopicsToFollow() {
         if (!entry.entryIsTopicsModule()) return@forEachIndexed
 
         if (modulePrefs.getBoolean("disable_topics_to_follow", false)) {
-            Log.d("Handle TopicsModule $entryIndex $entry")
+            //Log.d("Handle TopicsModule $entryIndex $entry")
             entryRemoveIndex.add(entryIndex)
             return@forEachIndexed
         }
@@ -406,7 +412,7 @@ fun JSONObject.entryRemoveSensitiveMediaWarning() {
                 }
         }
 
-        optJSONObject("content")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
+        optJSONObject("content")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("legacy")?.tweetLegacyCheckAndRemove()
         optJSONObject("content")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("core")?.optJSONObject("user_result")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
 
     } else if (entryIsConversationThread()) {
@@ -419,17 +425,17 @@ fun JSONObject.entryRemoveSensitiveMediaWarning() {
 
             //Log.d(item.toString())
 
-            item.optJSONObject("item")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
-            item.optJSONObject("item")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("core")?.optJSONObject("user_result")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
+            item.optJSONObject("item")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("legacy")?.tweetLegacyCheckAndRemove()
+            //item.optJSONObject("item")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("core")?.optJSONObject("user_result")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
         }
     }
 }
 
 fun JSONObject.entryChangeDescription() {
-    if (entryIsTweet() || entryIsConversationThread()) {
-        optJSONObject("content")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
-        optJSONObject("content")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("core")?.optJSONObject("user_result")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
-    }
+   // if (entryIsTweet() || entryIsConversationThread()) {
+        //optJSONObject("content")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
+        //optJSONObject("content")?.optJSONObject("content")?.optJSONObject("tweetResult")?.optJSONObject("result")?.optJSONObject("core")?.optJSONObject("user_result")?.optJSONObject("result")?.optJSONObject("legacy")?.userLegacyCheckAndRemove()
+    //}
 }
 
 fun JSONArray.entriesRemoveSensitiveMediaWarning() {
@@ -439,9 +445,9 @@ fun JSONArray.entriesRemoveSensitiveMediaWarning() {
 }
 
 fun JSONArray.entriesChangeDescription() {
-    forEach<JSONObject> { entry ->
-        entry.entryChangeDescription()
-    }
+    //forEach<JSONObject> { entry ->
+    //    entry.entryChangeDescription()
+   //}
 }
 
 fun JSONArray.entriesRemoveAnnoyance() {
@@ -449,7 +455,7 @@ fun JSONArray.entriesRemoveAnnoyance() {
     entriesRemoveWhoToFollow()
     entriesRemoveTopicsToFollow()
     entriesRemoveSensitiveMediaWarning()
-    entriesChangeDescription()
+    //entriesChangeDescription()
 }
 
 
@@ -470,9 +476,11 @@ fun handleJson(param: XC_MethodHook.MethodHookParam) {
     try {
         val json = JSONObject(content)
 
+        Log.d("Tweet foreach")
         json.jsonGetTweets()?.tweetsForEach { tweet ->
             tweet.tweetCheckAndRemove()
         }
+        Log.d("Instruction foreach")
         json.jsonGetInstructions()?.forEach<JSONObject> { instruction ->
             instruction.instructionCheckAndRemove()
         }
@@ -481,10 +489,13 @@ fun handleJson(param: XC_MethodHook.MethodHookParam) {
             thread.threadCheckAndRemove()
         }
         */
+        Log.d("Threads")
         if (json.has("threads")) {
             json.put("threads", JSONArray(ArrayList<JSONObject?>()))
         }
+        Log.d("Data")
         json.jsonGetData()?.dataCheckAndRemove()
+        Log.d("Done")
 
         content = json.toString()
     } catch (_: JSONException) {
