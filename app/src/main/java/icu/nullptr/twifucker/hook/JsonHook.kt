@@ -114,7 +114,8 @@ fun JSONObject.trendHasPromotedMetadata(): Boolean =
         ?.has("promotedMetadata") == true
 
 fun JSONObject.trendIsSports(): Boolean {
-    val sports_names = listOf("Sports", "NBA", "NFL", "MLB", "NHL", "MLS", "NLL", "PLL", "WNBA", "WNSL", "CWHL", "NWHL", "ESPN", "Football", "Basketball", "Soccer",
+    //Log.d("Is sports? " + toString())
+    val sports_names = listOf("Sports", "NBA", "NFL", "MLB", "NHL", "MLS", "NLL", "PLL", "WNBA", "WNSL", "CWHL", "NWHL", "ESPN", "Football", "Baseball", "Basketball", "Soccer",
         "Hockey", "Tennis", "Lacrosse", "Golf")
     if (optJSONObject("item")?.optJSONObject("content")?.has("tile") == true) {
         return true
@@ -476,11 +477,11 @@ fun handleJson(param: XC_MethodHook.MethodHookParam) {
     try {
         val json = JSONObject(content)
 
-        Log.d("Tweet foreach")
+        //Log.d("Tweet foreach")
         json.jsonGetTweets()?.tweetsForEach { tweet ->
             tweet.tweetCheckAndRemove()
         }
-        Log.d("Instruction foreach")
+        //Log.d("Instruction foreach")
         json.jsonGetInstructions()?.forEach<JSONObject> { instruction ->
             instruction.instructionCheckAndRemove()
         }
@@ -489,13 +490,13 @@ fun handleJson(param: XC_MethodHook.MethodHookParam) {
             thread.threadCheckAndRemove()
         }
         */
-        Log.d("Threads")
+        //Log.d("Threads")
         if (json.has("threads")) {
             json.put("threads", JSONArray(ArrayList<JSONObject?>()))
         }
-        Log.d("Data")
+        //Log.d("Data")
         json.jsonGetData()?.dataCheckAndRemove()
-        Log.d("Done")
+        //Log.d("Done")
 
         content = json.toString()
     } catch (_: JSONException) {
