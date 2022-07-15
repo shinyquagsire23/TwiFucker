@@ -97,10 +97,40 @@ fun JSONObject.entryGetLegacy(): JSONObject? {
 fun JSONObject.entryGetTrends(): JSONArray? =
     optJSONObject("content")?.optJSONObject("timelineModule")?.optJSONArray("items")
 
+fun JSONObject.entryGetEvent(): JSONObject? {
+    return optJSONObject("content")
+}
+
 // trend
 fun JSONObject.trendHasPromotedMetadata(): Boolean =
     optJSONObject("item")?.optJSONObject("content")?.optJSONObject("trend")
         ?.has("promotedMetadata") == true
+
+fun JSONObject.trendIsSports(): Boolean {
+    val sports_names = listOf("Sports", "NBA", "NFL", "MLB", "NHL", "MLS", "NLL", "PLL", "WNBA", "WNSL", "CWHL", "NWHL", "ESPN", "Football", "Basketball", "Soccer",
+        "Hockey", "Tennis", "Lacrosse", "Golf")
+    if (optJSONObject("item")?.optJSONObject("content")?.has("tile") == true) {
+        return true
+    }
+    var topicFull = optJSONObject("item")?.optJSONObject("content")?.optJSONObject("trend")?.optJSONObject("trendMetadata")?.getStringOrDefault("domainContext", "no domain context")
+    if (topicFull == null) {
+        topicFull = optJSONObject("item")?.optJSONObject("content")?.optJSONObject("eventSummary")?.getStringOrDefault("supportingText", "no supporting text")
+    }
+    var topic = ""
+    if (topicFull != null) {
+        if (topicFull.contains("Trending in ")) {
+            topic = topicFull.split("Trending in ")[1]
+        }
+        else {
+            topic = topicFull.split(" ")[0]
+        }
+    }
+
+    if (sports_names.contains(topic)) {
+        return true
+    }
+    return false
+}
 
 fun JSONArray.trendRemoveAds() {
     if (!modulePrefs.getBoolean("disable_promoted_trends", true)) return
@@ -108,6 +138,9 @@ fun JSONArray.trendRemoveAds() {
     forEachIndexed<JSONObject> { trendIndex, trend ->
         if (trend.trendHasPromotedMetadata()) {
             //Log.d("Handle trends ads $trendIndex $trend")
+            trendRemoveIndex.add(trendIndex)
+        }
+        if (trend.trendIsSports()) {
             trendRemoveIndex.add(trendIndex)
         }
     }
@@ -291,6 +324,9 @@ fun JSONArray.entriesRemoveTimelineAds() {
     val removeIndex = mutableListOf<Int>()
     forEachIndexed<JSONObject> { entryIndex, entry ->
         entry.entryGetTrends()?.trendRemoveAds()
+        if (entry.entryGetEvent()?.trendIsSports() == true) {
+            removeIndex.add(entryIndex)
+        }
 
         if (!modulePrefs.getBoolean("disable_promoted_content", true)) return@forEachIndexed
         if (entry.entryHasPromotedMetadata()) {
@@ -418,6 +454,7 @@ fun handleJson(param: XC_MethodHook.MethodHookParam) {
     try {
         reader.use { r ->
             content = r.readText()
+            //Log.d("Raw JSON: " + content)
         }
     } catch (_: java.net.SocketTimeoutException) {
         return
